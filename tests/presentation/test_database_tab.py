@@ -1,4 +1,8 @@
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QMessageBox
+
 from sqlite_viewer.models.domain import DatabaseIdentity
+from sqlite_viewer.models.errors import DatabaseWriteError
 from sqlite_viewer.services.connection import ConnectionManager
 from sqlite_viewer.presentation.database_tab import DatabaseTab
 
@@ -58,3 +62,51 @@ def test_database_tab_adds_row_and_refreshes_table(qtbot, sqlite_db_path):
 
     assert tab.data_view.model.rowCount() == 4
     assert tab.data_view.model.data(tab.data_view.model.index(3, 1)) == "Dana"
+
+
+def test_database_tab_deletes_confirmed_selected_row_and_refreshes_table(qtbot, sqlite_db_path, read_students, monkeypatch):
+    manager = ConnectionManager()
+    tab = DatabaseTab(DatabaseIdentity(sqlite_db_path, "sample.sqlite"), manager)
+    qtbot.addWidget(tab)
+    tab.open()
+    tab.show_table("students")
+    tab.data_view.table.selectRow(1)
+    monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.Yes)
+
+    qtbot.mouseClick(tab.data_view.delete_button, Qt.LeftButton)
+
+    assert tab.data_view.model.rowCount() == 2
+    assert tuple(row[0] for row in read_students(sqlite_db_path)) == (1, 3)
+
+
+def test_database_tab_does_not_delete_row_when_confirmation_is_rejected(qtbot, sqlite_db_path, read_students, monkeypatch):
+    manager = ConnectionManager()
+    tab = DatabaseTab(DatabaseIdentity(sqlite_db_path, "sample.sqlite"), manager)
+    qtbot.addWidget(tab)
+    tab.open()
+    tab.show_table("students")
+    tab.data_view.table.selectRow(1)
+    monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.No)
+
+    qtbot.mouseClick(tab.data_view.delete_button, Qt.LeftButton)
+
+    assert tuple(row[0] for row in read_students(sqlite_db_path)) == (1, 2, 3)
+
+
+def test_database_tab_shows_write_error_when_row_delete_fails(qtbot, sqlite_db_path, monkeypatch):
+    manager = ConnectionManager()
+    tab = DatabaseTab(DatabaseIdentity(sqlite_db_path, "sample.sqlite"), manager)
+    qtbot.addWidget(tab)
+    tab.open()
+    tab.show_table("students")
+    tab.data_view.table.selectRow(1)
+    monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.Yes)
+
+    def fail_delete(*args):
+        raise DatabaseWriteError("cannot delete row")
+
+    monkeypatch.setattr(tab._writes, "delete", fail_delete)
+
+    qtbot.mouseClick(tab.data_view.delete_button, Qt.LeftButton)
+
+    assert tab.error_label.text() == "cannot delete row"

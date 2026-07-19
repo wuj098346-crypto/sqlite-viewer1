@@ -34,6 +34,24 @@ def test_data_view_enables_edit_for_selected_row(qtbot):
     assert view.edit_button.isEnabled() is True
 
 
+def test_data_view_emits_selected_row_for_delete_and_clears_delete_action_on_new_page(qtbot):
+    view = DataView()
+    qtbot.addWidget(view)
+    view.set_page(PageResult(("id",), ((1,), (2,)), 1, 100, False, 2, (None, None)))
+
+    assert view.delete_button.isEnabled() is False
+    view.table.selectRow(1)
+    assert view.delete_button.isEnabled() is True
+
+    with qtbot.waitSignal(view.delete_requested) as signal:
+        qtbot.mouseClick(view.delete_button, Qt.LeftButton)
+
+    view.set_page(PageResult(("id",), ((1,),), 1, 100, False, 1, (None,)))
+
+    assert signal.args == [1]
+    assert view.delete_button.isEnabled() is False
+
+
 def test_data_view_disables_row_actions_without_selected_table(qtbot):
     view = DataView()
     qtbot.addWidget(view)
@@ -42,6 +60,7 @@ def test_data_view_disables_row_actions_without_selected_table(qtbot):
 
     assert view.add_button.isEnabled() is False
     assert view.edit_button.isEnabled() is False
+    assert view.delete_button.isEnabled() is False
 
 
 def test_editor_makes_primary_key_read_only_and_omits_generated_key(qtbot):

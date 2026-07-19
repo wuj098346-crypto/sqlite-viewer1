@@ -1,5 +1,5 @@
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QTabWidget, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QMessageBox, QTabWidget, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
 
 from sqlite_viewer.models.domain import DatabaseIdentity
 from sqlite_viewer.models.errors import SQLiteViewerError
@@ -42,6 +42,7 @@ class DatabaseTab(QWidget):
         self.data_view.page_requested.connect(self._load_page)
         self.data_view.add_requested.connect(self._show_add_dialog)
         self.data_view.edit_requested.connect(self._show_edit_dialog)
+        self.data_view.delete_requested.connect(self._delete_row)
         self.sql_view.execute_requested.connect(self.execute_sql)
 
     def open(self) -> None:
@@ -122,6 +123,30 @@ class DatabaseTab(QWidget):
         keys = tuple(row[index] for index, column in enumerate(self._current_columns) if column.is_primary_key)
         self._writes.update(self.connection_id, self._current_table_name, self._current_columns, keys, self.data_view.page.row_ids[row_index], values)
         self._load_current_page()
+
+    def _delete_row(self, row_index: int) -> None:
+        if self.connection_id is None or self._current_table_name is None:
+            return
+        if QMessageBox.question(
+            self,
+            "Delete row",
+            "Delete this row permanently?",
+            QMessageBox.Yes | QMessageBox.No,
+        ) != QMessageBox.Yes:
+            return
+        try:
+            row = self.data_view.page.rows[row_index]
+            keys = tuple(row[index] for index, column in enumerate(self._current_columns) if column.is_primary_key)
+            self._writes.delete(
+                self.connection_id,
+                self._current_table_name,
+                self._current_columns,
+                keys,
+                self.data_view.page.row_ids[row_index],
+            )
+            self._load_current_page()
+        except SQLiteViewerError as error:
+            self._show_error(error)
 
     def _load_current_page(self) -> None:
         if self.connection_id and self._current_table_name:

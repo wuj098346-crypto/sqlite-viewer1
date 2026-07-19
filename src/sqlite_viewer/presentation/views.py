@@ -54,6 +54,7 @@ class DataView(QWidget):
     page_requested = Signal(int)
     add_requested = Signal()
     edit_requested = Signal(int)
+    delete_requested = Signal(int)
 
     def __init__(self) -> None:
         super().__init__()
@@ -65,8 +66,10 @@ class DataView(QWidget):
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.add_button = QPushButton("Add row")
         self.edit_button = QPushButton("Edit row")
+        self.delete_button = QPushButton("Delete row")
         self._row_actions_enabled = True
         self.edit_button.setEnabled(False)
+        self.delete_button.setEnabled(False)
         self.previous_button = QPushButton("Previous")
         self.next_button = QPushButton("Next")
         self.page_label = QLabel()
@@ -74,10 +77,12 @@ class DataView(QWidget):
         self.next_button.clicked.connect(self._next_page)
         self.add_button.clicked.connect(self.add_requested)
         self.edit_button.clicked.connect(self._request_edit)
-        self.table.selectionModel().selectionChanged.connect(self._update_edit_enabled)
+        self.delete_button.clicked.connect(self._request_delete)
+        self.table.selectionModel().selectionChanged.connect(self._update_row_actions_enabled)
         controls = QHBoxLayout()
         controls.addWidget(self.add_button)
         controls.addWidget(self.edit_button)
+        controls.addWidget(self.delete_button)
         controls.addWidget(self.previous_button)
         controls.addWidget(self.page_label)
         controls.addWidget(self.next_button)
@@ -92,6 +97,7 @@ class DataView(QWidget):
         self.model.set_result(page)
         self.table.clearSelection()
         self.edit_button.setEnabled(False)
+        self.delete_button.setEnabled(False)
         self.page_label.setText(f"Page {page.page_number}")
         self.previous_button.setEnabled(page.page_number > 1)
         self.next_button.setEnabled(page.has_next_page)
@@ -102,18 +108,25 @@ class DataView(QWidget):
     def _next_page(self) -> None:
         self.page_requested.emit(self._page_number + 1)
 
-    def _update_edit_enabled(self) -> None:
-        self.edit_button.setEnabled(self._row_actions_enabled and self.table.currentIndex().isValid())
+    def _update_row_actions_enabled(self) -> None:
+        enabled = self._row_actions_enabled and self.table.currentIndex().isValid()
+        self.edit_button.setEnabled(enabled)
+        self.delete_button.setEnabled(enabled)
 
     def set_row_actions_enabled(self, enabled: bool) -> None:
         self._row_actions_enabled = enabled
         self.add_button.setEnabled(enabled)
-        self._update_edit_enabled()
+        self._update_row_actions_enabled()
 
     def _request_edit(self) -> None:
         index = self.table.currentIndex()
         if index.isValid():
             self.edit_requested.emit(index.row())
+
+    def _request_delete(self) -> None:
+        index = self.table.currentIndex()
+        if index.isValid():
+            self.delete_requested.emit(index.row())
 
 
 class RowEditorDialog(QDialog):
