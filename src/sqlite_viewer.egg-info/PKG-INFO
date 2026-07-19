@@ -1,0 +1,10 @@
+Metadata-Version: 2.4
+Name: sqlite-viewer
+Version: 0.1.0
+Summary: A safe read-only SQLite desktop viewer
+Requires-Python: >=3.12
+Requires-Dist: PySide6<7,>=6.8
+Provides-Extra: dev
+Requires-Dist: pytest<9,>=8.3; extra == "dev"
+Requires-Dist: pytest-qt<5,>=4.4; extra == "dev"
+Requires-Dist: PyInstaller<7,>=6.11; extra == "dev"
