@@ -1,72 +1,72 @@
-# Table Row Editing Design
+# 表数据新增与编辑设计
 
-## Purpose
+## 目标
 
-Allow users to add and update rows directly in the SQLite database they opened. The data page remains the only write surface: the SQL page continues to accept only read-only statements, and the application does not add delete or schema-editing capabilities.
+允许用户直接向已打开的 SQLite 数据库新增和修改数据行。数据页是唯一的写入入口：SQL 页继续只允许只读语句，应用不增加删除数据或修改表结构的能力。
 
-## Scope
+## 范围
 
-- Add `Add row` and `Edit row` actions to the data page for tables.
-- Write changes back to the opened SQLite file.
-- Keep all primary-key fields immutable during edits.
-- Let SQLite generate a single `INTEGER PRIMARY KEY` when adding a row.
-- Require user-provided values for composite and text primary keys when adding a row.
-- Support nullable fields with an explicit `NULL` control that is distinct from an empty string.
-- Refresh the current page after a successful write.
+- 在表的数据页增加“新增行”和“编辑行”操作。
+- 将变更直接写回已打开的 SQLite 文件。
+- 编辑时始终禁止修改所有主键字段。
+- 新增时，由 SQLite 自动生成单列 `INTEGER PRIMARY KEY` 的值。
+- 新增复合主键或文本主键记录时，要求用户填写主键值。
+- 对可空字段提供明确的 `NULL` 控件，与空字符串区分。
+- 成功写入后刷新当前数据页。
 
-Views and indexes are not editable. The feature does not add delete operations, arbitrary write SQL, or schema modification.
+视图和索引不可编辑。本功能不包含删除、任意写入 SQL 或修改表结构。
 
-## Interface
+## 界面
 
-The data page toolbar contains `Add row` and `Edit row` actions. `Edit row` stays disabled until the user selects a row.
+数据页工具栏提供“新增行”和“编辑行”操作。未选择数据行时，“编辑行”保持禁用。
 
-Both actions open a form dialog generated from the selected table's column metadata.
+两个操作都打开根据当前表字段元数据生成的表单对话框。
 
-- Edit forms render primary-key fields as read-only values and allow changes only to non-primary-key fields.
-- Add forms omit a single `INTEGER PRIMARY KEY` field so SQLite generates it. Composite and text primary-key fields are editable and required.
-- Nullable columns include a `NULL` checkbox. Selecting it disables the value input and writes SQL `NULL`; leaving it clear permits an empty string.
-- Non-nullable editable fields must contain a value. Validation failures remain in the dialog with an actionable message.
-- SQLite constraint or write errors remain visible in the dialog and preserve every entered value.
+- 编辑表单将主键字段显示为只读值，只允许修改非主键字段。
+- 新增表单省略单列 `INTEGER PRIMARY KEY` 字段，由 SQLite 自动生成其值。复合主键和文本主键字段可填写且必填。
+- 每个可空字段均提供 `NULL` 复选框。勾选后禁用值输入框并写入 SQL `NULL`；未勾选时允许保存空字符串。
+- 不可空的可编辑字段必须包含值。校验失败时，在写入前阻止提交并显示明确提示。
+- SQLite 约束或写入失败时，对话框保持打开，且保留所有已输入的值。
 
-## Connection And Write Design
+## 连接与写入设计
 
-The application opens databases with a normal read-write connection for table editing. It continues to restrict `SqlView` through the existing read-only query validator, so allowing the connection itself does not allow arbitrary write statements from the SQL editor.
+应用以普通读写连接打开数据库，以支持数据页编辑。`SqlView` 仍通过现有的只读查询校验器限制 SQL 语句，因此连接具备写入能力不会使 SQL 编辑器能够执行任意写入语句。
 
-Create a focused write service that owns parameterized row insertion and updates. It takes table metadata, values, and stable row identity; it quotes identifiers with the existing schema helper and passes all values as SQLite parameters.
+新增一个职责明确的写入服务，负责参数化的数据行新增和更新。它接收表元数据、字段值和稳定的行标识；表和列名继续使用现有的标识符转义逻辑，所有值均作为 SQLite 参数传递。
 
-The update statement includes only non-primary-key columns in `SET`. Its `WHERE` clause addresses the original primary-key values, preventing primary-key modifications. For tables without a declared primary key, the table query provides SQLite's hidden `rowid` as internal row identity and updates use that value. A `WITHOUT ROWID` table has a declared key and follows the primary-key path.
+更新语句的 `SET` 中只包含非主键字段。`WHERE` 使用原始主键值定位，避免主键被修改。对于没有声明主键的表，表查询会保留 SQLite 隐藏的 `rowid` 作为内部行标识，并用该值更新。`WITHOUT ROWID` 表必定拥有声明的主键，因此使用主键路径。
 
-## Data Flow
+## 数据流
 
-1. Selecting a table loads its column metadata and a paginated data result.
-2. The data view retains the source row values and, when needed, the internal `rowid` identity without exposing it as an editable field.
-3. The user opens the add or edit dialog and submits validated values.
-4. The database tab invokes the write service.
-5. On success, the tab reloads the selected table's current page and closes the dialog.
-6. On failure, the dialog stays open and shows the service error.
+1. 用户选择表后，应用加载字段元数据和分页数据结果。
+2. 数据视图保留来源行的字段值；在需要时，也保留内部 `rowid` 标识，但不将其显示为可编辑字段。
+3. 用户打开新增或编辑对话框，并提交已通过校验的值。
+4. 数据库标签页调用写入服务。
+5. 写入成功后，标签页重新加载当前表的当前页，并关闭对话框。
+6. 写入失败后，对话框保持打开并显示服务错误。
 
-## Error Handling
+## 错误处理
 
-- No table is selected: disable both row actions.
-- No row is selected: disable `Edit row`.
-- A required primary or non-nullable value is absent: block submission before writing.
-- SQLite rejects a constraint, type, lock, or I/O operation: show the database error without discarding values.
-- Unsupported objects such as views and indexes: do not expose row actions.
+- 未选择表：禁用所有行操作。
+- 未选择数据行：禁用“编辑行”。
+- 必填的主键或不可空字段缺少值：在写入前阻止提交。
+- SQLite 拒绝约束、类型、锁定或 I/O 操作：显示数据库错误，不丢弃已填写的值。
+- 视图、索引等不支持的对象：不显示行操作。
 
-## Tests
+## 测试
 
-Service tests cover:
+服务层测试覆盖：
 
-- SQLite-generated values for single `INTEGER PRIMARY KEY` inserts.
-- Required composite and text primary-key values.
-- Explicit `NULL` versus empty-string persistence.
-- Updates that omit primary-key fields from `SET`.
-- Updates to tables without declared primary keys using `rowid`.
+- 插入单列 `INTEGER PRIMARY KEY` 时由 SQLite 自动生成值。
+- 复合主键和文本主键值为必填项。
+- 显式 `NULL` 与空字符串分别正确持久化。
+- 更新语句不在 `SET` 中包含主键字段。
+- 没有声明主键的表通过 `rowid` 更新。
 
-Presentation tests cover:
+界面层测试覆盖：
 
-- Data-page action enablement based on table and row selection.
-- Read-only primary-key fields in edit dialogs.
-- Omitted auto-generated integer primary key in add dialogs.
-- Validation and error presentation.
-- Data refresh after a successful add or update.
+- 根据表和行选择状态启用或禁用数据页操作。
+- 编辑对话框中的主键字段为只读。
+- 新增对话框省略自动生成的整数主键字段。
+- 校验和错误信息的呈现。
+- 新增或编辑成功后刷新数据。
