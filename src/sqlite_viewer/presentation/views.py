@@ -65,6 +65,7 @@ class DataView(QWidget):
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.add_button = QPushButton("Add row")
         self.edit_button = QPushButton("Edit row")
+        self._row_actions_enabled = True
         self.edit_button.setEnabled(False)
         self.previous_button = QPushButton("Previous")
         self.next_button = QPushButton("Next")
@@ -102,7 +103,12 @@ class DataView(QWidget):
         self.page_requested.emit(self._page_number + 1)
 
     def _update_edit_enabled(self) -> None:
-        self.edit_button.setEnabled(self.table.currentIndex().isValid())
+        self.edit_button.setEnabled(self._row_actions_enabled and self.table.currentIndex().isValid())
+
+    def set_row_actions_enabled(self, enabled: bool) -> None:
+        self._row_actions_enabled = enabled
+        self.add_button.setEnabled(enabled)
+        self._update_edit_enabled()
 
     def _request_edit(self) -> None:
         index = self.table.currentIndex()

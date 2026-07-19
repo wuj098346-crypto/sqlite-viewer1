@@ -25,6 +25,7 @@ class DatabaseTab(QWidget):
         self.object_tree.setHeaderHidden(True)
         self.error_label = QLabel()
         self.data_view = DataView()
+        self.data_view.set_row_actions_enabled(False)
         self.structure_view = StructureView()
         self.sql_view = SqlView()
         self.content_tabs = QTabWidget()
@@ -62,6 +63,7 @@ class DatabaseTab(QWidget):
         try:
             self._current_table_name = table_name
             self._current_columns = self._schema.table_columns(self.connection_id, table_name)
+            self.data_view.set_row_actions_enabled(True)
             self.data_view.set_page(self._query.fetch_table_page(self.connection_id, table_name, 1))
             self.structure_view.set_structure(
                 self._current_columns,

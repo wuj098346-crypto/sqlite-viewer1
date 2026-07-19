@@ -34,6 +34,16 @@ def test_data_view_enables_edit_for_selected_row(qtbot):
     assert view.edit_button.isEnabled() is True
 
 
+def test_data_view_disables_row_actions_without_selected_table(qtbot):
+    view = DataView()
+    qtbot.addWidget(view)
+
+    view.set_row_actions_enabled(False)
+
+    assert view.add_button.isEnabled() is False
+    assert view.edit_button.isEnabled() is False
+
+
 def test_editor_makes_primary_key_read_only_and_omits_generated_key(qtbot):
     columns = (ColumnInfo("id", "INTEGER", True, True, None), ColumnInfo("note", "TEXT", False, False, None))
     edit_dialog = RowEditorDialog("Edit row", columns, {"id": 1, "note": ""}, is_new=False)
