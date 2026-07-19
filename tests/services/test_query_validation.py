@@ -64,7 +64,7 @@ def test_comment_normalization_preserves_quoted_comment_markers():
 
 def test_execute_read_only_returns_columns_rows_and_elapsed_time(sqlite_db_path):
     manager = ConnectionManager()
-    connection_id = manager.open_read_only(sqlite_db_path)
+    connection_id = manager.open(sqlite_db_path)
     service = QueryService(manager)
 
     result = service.execute_read_only(connection_id, "SELECT id, name FROM students ORDER BY id")
@@ -82,7 +82,7 @@ def test_execute_read_only_caps_results_at_one_thousand_rows(tmp_path):
         connection.executemany("INSERT INTO numbers VALUES (?)", ((number,) for number in range(1001)))
 
     manager = ConnectionManager()
-    connection_id = manager.open_read_only(database_path)
+    connection_id = manager.open(database_path)
 
     result = QueryService(manager).execute_read_only(
         connection_id, "SELECT value FROM numbers ORDER BY value"
@@ -96,7 +96,7 @@ def test_execute_read_only_caps_results_at_one_thousand_rows(tmp_path):
 
 def test_sqlite_query_errors_become_domain_errors(sqlite_db_path):
     manager = ConnectionManager()
-    connection_id = manager.open_read_only(sqlite_db_path)
+    connection_id = manager.open(sqlite_db_path)
 
     with pytest.raises(DatabaseQueryError):
         QueryService(manager).execute_read_only(connection_id, "SELECT missing FROM students")

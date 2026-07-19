@@ -8,7 +8,7 @@ from sqlite_viewer.services.schema import SchemaService
 @pytest.fixture
 def schema_service(sqlite_db_path):
     manager = ConnectionManager()
-    connection_id = manager.open_read_only(sqlite_db_path)
+    connection_id = manager.open(sqlite_db_path)
     yield SchemaService(manager), connection_id
     manager.close_all()
 

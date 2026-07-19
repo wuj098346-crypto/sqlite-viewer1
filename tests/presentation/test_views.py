@@ -1,7 +1,7 @@
 from PySide6.QtCore import Qt
 
 from sqlite_viewer.models.domain import ColumnInfo, PageResult, QueryResult
-from sqlite_viewer.presentation.views import DataView, ResultTableModel, SqlView, StructureView
+from sqlite_viewer.presentation.views import DataView, ResultTableModel, RowEditorDialog, SqlView, StructureView
 
 
 def test_result_model_exposes_page_columns_and_rows():
@@ -22,6 +22,28 @@ def test_data_view_emits_requested_next_page(qtbot):
         qtbot.mouseClick(view.next_button, Qt.LeftButton)
 
     assert signal.args == [2]
+
+
+def test_data_view_enables_edit_for_selected_row(qtbot):
+    view = DataView()
+    qtbot.addWidget(view)
+    view.set_page(PageResult(("id",), ((1,),), 1, 100, False, 1, (None,)))
+
+    assert view.edit_button.isEnabled() is False
+    view.table.selectRow(0)
+    assert view.edit_button.isEnabled() is True
+
+
+def test_editor_makes_primary_key_read_only_and_omits_generated_key(qtbot):
+    columns = (ColumnInfo("id", "INTEGER", True, True, None), ColumnInfo("note", "TEXT", False, False, None))
+    edit_dialog = RowEditorDialog("Edit row", columns, {"id": 1, "note": ""}, is_new=False)
+    add_dialog = RowEditorDialog("Add row", columns, {}, is_new=True)
+    qtbot.addWidget(edit_dialog)
+    qtbot.addWidget(add_dialog)
+
+    assert edit_dialog.inputs["id"].isReadOnly() is True
+    assert "note" in edit_dialog.null_controls
+    assert "id" not in add_dialog.inputs
 
 
 def test_structure_view_displays_columns_and_create_sql(qtbot):

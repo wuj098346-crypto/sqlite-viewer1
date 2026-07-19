@@ -45,3 +45,16 @@ def test_rejected_sql_stays_in_current_tab_editor(qtbot, sqlite_db_path):
 
     assert "read-only" in tab.sql_view.error_label.text().lower()
     assert tab.sql_view.editor.toPlainText().startswith("UPDATE")
+
+
+def test_database_tab_adds_row_and_refreshes_table(qtbot, sqlite_db_path):
+    manager = ConnectionManager()
+    tab = DatabaseTab(DatabaseIdentity(sqlite_db_path, "sample.sqlite"), manager)
+    qtbot.addWidget(tab)
+    tab.open()
+    tab.show_table("students")
+
+    tab._add_row({"name": "Dana", "course_id": "1", "enrolled_at": None})
+
+    assert tab.data_view.model.rowCount() == 4
+    assert tab.data_view.model.data(tab.data_view.model.index(3, 1)) == "Dana"

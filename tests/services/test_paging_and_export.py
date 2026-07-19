@@ -20,7 +20,7 @@ def paged_connection(tmp_path):
         )
 
     manager = ConnectionManager()
-    connection_id = manager.open_read_only(database_path)
+    connection_id = manager.open(database_path)
     yield QueryService(manager), connection_id
     manager.close_all()
 
@@ -59,11 +59,25 @@ def test_table_paging_quotes_table_identifiers(tmp_path):
         connection.execute('INSERT INTO "records with space" VALUES (1)')
 
     manager = ConnectionManager()
-    connection_id = manager.open_read_only(database_path)
+    connection_id = manager.open(database_path)
 
     result = QueryService(manager).fetch_table_page(connection_id, "records with space", 1)
 
     assert result.rows == ((1,),)
+
+
+def test_keyless_table_retains_hidden_rowids(tmp_path):
+    database_path = tmp_path / "notes.sqlite"
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("CREATE TABLE notes (body TEXT)")
+        connection.executemany("INSERT INTO notes VALUES (?)", (("one",), ("two",)))
+
+    manager = ConnectionManager()
+    result = QueryService(manager).fetch_table_page(manager.open(database_path), "notes", 1)
+
+    assert result.columns == ("body",)
+    assert result.rows == (("one",), ("two",))
+    assert result.row_ids == (1, 2)
 
 
 def test_csv_export_writes_utf8_headers_and_normalizes_nulls(tmp_path):

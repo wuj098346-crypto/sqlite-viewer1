@@ -33,6 +33,7 @@ class PageResult:
     page_size: int
     has_next_page: bool
     total_rows: int | None
+    row_ids: tuple[int | None, ...] = ()
 
 
 @dataclass(frozen=True)

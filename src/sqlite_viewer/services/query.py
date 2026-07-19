@@ -235,19 +235,32 @@ class QueryService:
             total_rows = connection.execute(
                 f"SELECT COUNT(*) FROM {identifier}"
             ).fetchone()[0]
-            cursor = connection.execute(
-                f"SELECT * FROM {identifier} LIMIT ? OFFSET ?",
-                (TABLE_PAGE_SIZE, offset),
-            )
-            rows = tuple(tuple(row) for row in cursor)
+            column_info = tuple(connection.execute(f"PRAGMA table_info({identifier})"))
+            has_primary_key = any(row["pk"] for row in column_info)
+            if has_primary_key:
+                cursor = connection.execute(
+                    f"SELECT * FROM {identifier} LIMIT ? OFFSET ?",
+                    (TABLE_PAGE_SIZE, offset),
+                )
+                rows = tuple(tuple(row) for row in cursor)
+                row_ids = (None,) * len(rows)
+            else:
+                cursor = connection.execute(
+                    f"SELECT rowid, * FROM {identifier} LIMIT ? OFFSET ?",
+                    (TABLE_PAGE_SIZE, offset),
+                )
+                raw_rows = tuple(tuple(row) for row in cursor)
+                row_ids = tuple(row[0] for row in raw_rows)
+                rows = tuple(row[1:] for row in raw_rows)
         except sqlite3.Error as error:
             raise DatabaseQueryError(f"Could not load table data for {table_name}") from error
 
         return PageResult(
-            columns=tuple(column[0] for column in cursor.description or ()),
+            columns=tuple(column["name"] for column in column_info),
             rows=rows,
             page_number=page_number,
             page_size=TABLE_PAGE_SIZE,
             has_next_page=offset + len(rows) < total_rows,
             total_rows=total_rows,
+            row_ids=row_ids,
         )

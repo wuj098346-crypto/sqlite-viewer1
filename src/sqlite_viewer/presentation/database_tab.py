@@ -3,7 +3,8 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QTabWidget, QTreeWidget, QTre
 
 from sqlite_viewer.models.domain import DatabaseIdentity
 from sqlite_viewer.models.errors import SQLiteViewerError
-from sqlite_viewer.presentation.views import DataView, SqlView, StructureView
+from sqlite_viewer.presentation.views import DataView, RowEditorDialog, SqlView, StructureView
+from sqlite_viewer.services.row_write import RowWriteService
 from sqlite_viewer.services.connection import ConnectionManager
 from sqlite_viewer.services.query import QueryService
 from sqlite_viewer.services.schema import SchemaService
@@ -16,6 +17,9 @@ class DatabaseTab(QWidget):
         self._connections = connections
         self._schema = SchemaService(connections)
         self._query = QueryService(connections)
+        self._writes = RowWriteService(connections)
+        self._current_table_name: str | None = None
+        self._current_columns = ()
         self.connection_id: str | None = None
         self.object_tree = QTreeWidget()
         self.object_tree.setHeaderHidden(True)
@@ -35,6 +39,8 @@ class DatabaseTab(QWidget):
         layout.addLayout(body)
         self.object_tree.itemActivated.connect(self._activated_object)
         self.data_view.page_requested.connect(self._load_page)
+        self.data_view.add_requested.connect(self._show_add_dialog)
+        self.data_view.edit_requested.connect(self._show_edit_dialog)
         self.sql_view.execute_requested.connect(self.execute_sql)
 
     def open(self) -> None:
@@ -54,9 +60,11 @@ class DatabaseTab(QWidget):
         if self.connection_id is None:
             return
         try:
+            self._current_table_name = table_name
+            self._current_columns = self._schema.table_columns(self.connection_id, table_name)
             self.data_view.set_page(self._query.fetch_table_page(self.connection_id, table_name, 1))
             self.structure_view.set_structure(
-                self._schema.table_columns(self.connection_id, table_name),
+                self._current_columns,
                 self._schema.create_sql(self.connection_id, table_name),
             )
             self.error_label.clear()
@@ -98,6 +106,46 @@ class DatabaseTab(QWidget):
                 self.data_view.set_page(self._query.fetch_table_page(self.connection_id, database_object.name, page_number))
             except SQLiteViewerError as error:
                 self._show_error(error)
+
+    def _add_row(self, values: dict[str, object]) -> None:
+        if self.connection_id is None or self._current_table_name is None:
+            return
+        self._writes.insert(self.connection_id, self._current_table_name, self._current_columns, values)
+        self._load_current_page()
+
+    def _edit_row(self, row_index: int, values: dict[str, object]) -> None:
+        if self.connection_id is None or self._current_table_name is None:
+            return
+        row = self.data_view.page.rows[row_index]
+        keys = tuple(row[index] for index, column in enumerate(self._current_columns) if column.is_primary_key)
+        self._writes.update(self.connection_id, self._current_table_name, self._current_columns, keys, self.data_view.page.row_ids[row_index], values)
+        self._load_current_page()
+
+    def _load_current_page(self) -> None:
+        if self.connection_id and self._current_table_name:
+            self.data_view.set_page(self._query.fetch_table_page(self.connection_id, self._current_table_name, self.data_view._page_number))
+
+    def _show_add_dialog(self) -> None:
+        if self._current_table_name is None:
+            return
+        dialog = RowEditorDialog("Add row", self._current_columns, {}, is_new=True)
+        dialog.submitted.connect(lambda values: self._save_dialog(dialog, lambda: self._add_row(values)))
+        dialog.exec()
+
+    def _show_edit_dialog(self, row_index: int) -> None:
+        row = self.data_view.page.rows[row_index]
+        values = {column.name: row[index] for index, column in enumerate(self._current_columns)}
+        dialog = RowEditorDialog("Edit row", self._current_columns, values, is_new=False)
+        dialog.submitted.connect(lambda updated: self._save_dialog(dialog, lambda: self._edit_row(row_index, updated)))
+        dialog.exec()
+
+    @staticmethod
+    def _save_dialog(dialog: RowEditorDialog, save) -> None:
+        try:
+            save()
+            dialog.accept()
+        except SQLiteViewerError as error:
+            dialog.error_label.setText(str(error))
 
     def _show_error(self, error: SQLiteViewerError) -> None:
         self.error_label.setText(str(error))

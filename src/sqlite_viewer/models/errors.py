@@ -14,5 +14,9 @@ class DatabaseQueryError(SQLiteViewerError):
     """Raised when a permitted database read fails."""
 
 
+class DatabaseWriteError(SQLiteViewerError):
+    """Raised when a table row cannot be written."""
+
+
 class ExportError(SQLiteViewerError):
     """Raised when a CSV result cannot be written."""
