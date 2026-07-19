@@ -1,34 +1,34 @@
-# Row deletion design
+# 删除行设计
 
-## Goal
+## 目标
 
-Allow a user to permanently delete one selected row from the currently opened SQLite table.
+允许用户永久删除当前已打开 SQLite 数据表中的单条记录。
 
-## Scope
+## 范围
 
-- Add a delete action beside the existing add and edit row actions.
-- Keep row actions disabled until a table is selected.
-- Require an explicit confirmation before issuing a deletion.
-- Delete rows by their primary-key values when a primary key exists; otherwise, use the displayed row's `rowid`.
-- Refresh the current table page after a successful deletion.
-- Surface database errors through the existing write-error handling path.
-- Update the README to describe row deletion and clarify that SQL execution remains read-only.
+- 在已有的新增和编辑行操作旁增加删除操作。
+- 未选择数据表时，行操作保持禁用状态。
+- 执行删除前必须经过明确确认。
+- 数据表有主键时按主键值删除；没有主键时，使用已显示记录的 `rowid` 删除。
+- 成功删除后刷新当前数据表页。
+- 沿用现有的写入错误处理路径展示数据库错误。
+- 更新 README，说明支持删除行，并明确 SQL 执行仍仅允许只读查询。
 
-## Non-goals
+## 非目标
 
-- Deleting tables, views, indexes, or database files.
-- Deleting multiple rows at once.
-- Changing the read-only restrictions on the SQL editor.
-- Adding an undo mechanism.
+- 删除数据表、视图、索引或数据库文件。
+- 一次删除多条记录。
+- 放宽 SQL 编辑器的只读限制。
+- 提供撤销删除功能。
 
-## Design
+## 设计
 
-`DataView` exposes a delete request for the selected row and keeps its delete control in the same enabled state as its existing row actions. `DatabaseTab` asks the user to confirm the permanent deletion. On confirmation, it derives the row locator using the same primary-key-then-`rowid` policy as editing and delegates to `RowWriteService`.
+`DataView` 为所选记录发出删除请求，并让删除控件与现有行操作共享启用状态。`DatabaseTab` 在删除前要求用户确认；确认后，它按编辑操作相同的“主键优先、`rowid` 兜底”策略确定记录，再委托 `RowWriteService` 执行删除。
 
-`RowWriteService.delete` builds a parameterized `DELETE` statement using quoted identifiers. It raises `DatabaseWriteError` when no primary key or `rowid` is available, and maps SQLite failures to that existing error type. After a successful write, `DatabaseTab` reloads the current page.
+`RowWriteService.delete` 使用引用后的标识符构建参数化 `DELETE` 语句。当缺少主键和 `rowid` 时，它抛出 `DatabaseWriteError`；SQLite 返回的错误也映射为该现有错误类型。写入成功后，`DatabaseTab` 重新加载当前页。
 
-## Validation
+## 验证
 
-- Service tests prove deletion by primary key and by `rowid` for a keyless table.
-- Presentation tests prove a deletion refreshes the displayed data and that actions are unavailable before selecting a table.
-- The full test suite remains green.
+- 服务测试覆盖按主键删除，以及无主键数据表按 `rowid` 删除。
+- 展示层测试覆盖删除后刷新显示数据，以及选择数据表前行操作不可用。
+- 完整测试套件保持通过。
