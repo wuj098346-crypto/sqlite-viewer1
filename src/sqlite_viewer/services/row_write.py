@@ -60,16 +60,10 @@ class RowWriteService:
             if len(primary_key_values) != len(keys):
                 raise DatabaseWriteError("Primary key values are required")
             where = " AND ".join(f"{quote_identifier(column.name)} IS ?" for column in keys)
-            locator_values = primary_key_values
-            try:
-                matches = self._connections.get(connection_id).execute(
-                    f"SELECT COUNT(*) FROM {quote_identifier(table_name)} WHERE {where}",
-                    locator_values,
-                ).fetchone()[0]
-            except sqlite3.Error as error:
-                raise DatabaseWriteError(str(error)) from error
-            if matches != 1:
-                raise DatabaseWriteError("Row identity is required")
+            self._delete_by_unique_primary_key(
+                connection_id, table_name, where, primary_key_values
+            )
+            return
         elif row_id is not None and (row_identifier := hidden_row_identifier(
             column.name for column in columns
         )) is not None:
@@ -78,6 +72,29 @@ class RowWriteService:
         else:
             raise DatabaseWriteError("Row identity is required")
         self._execute(connection_id, f"DELETE FROM {quote_identifier(table_name)} WHERE {where}", locator_values)
+
+    def _delete_by_unique_primary_key(
+        self,
+        connection_id: str,
+        table_name: str,
+        where: str,
+        primary_key_values: tuple[object, ...],
+    ) -> None:
+        identifier = quote_identifier(table_name)
+        statement = (
+            f"DELETE FROM {identifier} WHERE {where} "
+            f"AND (SELECT COUNT(*) FROM {identifier} WHERE {where}) = 1"
+        )
+        try:
+            connection = self._connections.get(connection_id)
+            cursor = connection.execute(
+                statement, primary_key_values + primary_key_values
+            )
+            if cursor.rowcount != 1:
+                raise DatabaseWriteError("Row identity is required")
+            connection.commit()
+        except sqlite3.Error as error:
+            raise DatabaseWriteError(str(error)) from error
 
     def _execute(self, connection_id: str, statement: str, parameters: tuple[object, ...]) -> None:
         try:

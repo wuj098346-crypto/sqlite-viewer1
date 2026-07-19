@@ -107,6 +107,18 @@ def test_delete_rejects_ambiguous_null_text_primary_key(tmp_path):
     ).fetchall()) == (("first",), ("second",))
 
 
+def test_delete_rejects_missing_primary_key(tmp_path):
+    path = tmp_path / "records.sqlite"
+    with sqlite3.connect(path) as connection:
+        connection.execute("CREATE TABLE records (code TEXT PRIMARY KEY)")
+    manager = ConnectionManager()
+    connection_id = manager.open(path)
+    columns = SchemaService(manager).table_columns(connection_id, "records")
+
+    with pytest.raises(DatabaseWriteError, match="Row identity is required"):
+        RowWriteService(manager).delete(connection_id, "records", columns, ("missing",), None)
+
+
 def test_update_keyless_table_uses_rowid(tmp_path):
     path = tmp_path / "notes.sqlite"
     with sqlite3.connect(path) as connection:
