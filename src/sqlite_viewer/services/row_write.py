@@ -3,7 +3,7 @@ import sqlite3
 from sqlite_viewer.models.domain import ColumnInfo
 from sqlite_viewer.models.errors import DatabaseWriteError
 from sqlite_viewer.services.connection import ConnectionManager
-from sqlite_viewer.services.schema import quote_identifier
+from sqlite_viewer.services.schema import hidden_row_identifier, quote_identifier
 
 
 def _is_generated_integer_key(column: ColumnInfo, columns: tuple[ColumnInfo, ...]) -> bool:
@@ -43,10 +43,12 @@ class RowWriteService:
         if keys:
             if len(primary_key_values) != len(keys):
                 raise DatabaseWriteError("Primary key values are required")
-            where = " AND ".join(f"{quote_identifier(column.name)} = ?" for column in keys)
+            where = " AND ".join(f"{quote_identifier(column.name)} IS ?" for column in keys)
             locator_values = primary_key_values
-        elif row_id is not None:
-            where = "rowid = ?"
+        elif row_id is not None and (row_identifier := hidden_row_identifier(
+            column.name for column in columns
+        )) is not None:
+            where = f"{quote_identifier(row_identifier)} = ?"
             locator_values = (row_id,)
         else:
             raise DatabaseWriteError("Row identity is required")
@@ -57,10 +59,12 @@ class RowWriteService:
         if keys:
             if len(primary_key_values) != len(keys):
                 raise DatabaseWriteError("Primary key values are required")
-            where = " AND ".join(f"{quote_identifier(column.name)} = ?" for column in keys)
+            where = " AND ".join(f"{quote_identifier(column.name)} IS ?" for column in keys)
             locator_values = primary_key_values
-        elif row_id is not None:
-            where = "rowid = ?"
+        elif row_id is not None and (row_identifier := hidden_row_identifier(
+            column.name for column in columns
+        )) is not None:
+            where = f"{quote_identifier(row_identifier)} = ?"
             locator_values = (row_id,)
         else:
             raise DatabaseWriteError("Row identity is required")

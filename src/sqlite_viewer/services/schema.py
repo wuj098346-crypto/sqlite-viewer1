@@ -1,4 +1,5 @@
 import sqlite3
+from collections.abc import Iterable
 
 from sqlite_viewer.models.domain import ColumnInfo, DatabaseObject
 from sqlite_viewer.models.errors import DatabaseQueryError
@@ -7,6 +8,14 @@ from sqlite_viewer.services.connection import ConnectionManager
 
 def quote_identifier(name: str) -> str:
     return f'"{name.replace("\"", "\"\"")}"'
+
+
+def hidden_row_identifier(columns: Iterable[str]) -> str | None:
+    names = {column.lower() for column in columns}
+    return next(
+        (candidate for candidate in ("rowid", "_rowid_", "oid") if candidate not in names),
+        None,
+    )
 
 
 class SchemaService:

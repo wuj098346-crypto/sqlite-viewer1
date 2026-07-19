@@ -5,6 +5,7 @@ from time import perf_counter
 from sqlite_viewer.models.domain import PageResult, QueryResult
 from sqlite_viewer.models.errors import DatabaseQueryError, ReadOnlyViolationError
 from sqlite_viewer.services.connection import ConnectionManager
+from sqlite_viewer.services.schema import hidden_row_identifier, quote_identifier
 
 
 MAX_QUERY_ROWS = 1_000
@@ -194,10 +195,6 @@ def validate_read_only_statement(statement: str) -> str:
     return candidate
 
 
-def quote_identifier(name: str) -> str:
-    return f'"{name.replace("\"", "\"\"")}"'
-
-
 class QueryService:
     def __init__(self, connections: ConnectionManager) -> None:
         self._connections = connections
@@ -236,6 +233,7 @@ class QueryService:
                 f"SELECT COUNT(*) FROM {identifier}"
             ).fetchone()[0]
             column_info = tuple(connection.execute(f"PRAGMA table_info({identifier})"))
+            columns = tuple(column["name"] for column in column_info)
             has_primary_key = any(row["pk"] for row in column_info)
             if has_primary_key:
                 cursor = connection.execute(
@@ -244,9 +242,16 @@ class QueryService:
                 )
                 rows = tuple(tuple(row) for row in cursor)
                 row_ids = (None,) * len(rows)
+            elif (row_identifier := hidden_row_identifier(columns)) is None:
+                cursor = connection.execute(
+                    f"SELECT * FROM {identifier} LIMIT ? OFFSET ?",
+                    (TABLE_PAGE_SIZE, offset),
+                )
+                rows = tuple(tuple(row) for row in cursor)
+                row_ids = (None,) * len(rows)
             else:
                 cursor = connection.execute(
-                    f"SELECT rowid, * FROM {identifier} LIMIT ? OFFSET ?",
+                    f"SELECT {quote_identifier(row_identifier)}, * FROM {identifier} LIMIT ? OFFSET ?",
                     (TABLE_PAGE_SIZE, offset),
                 )
                 raw_rows = tuple(tuple(row) for row in cursor)
@@ -256,7 +261,7 @@ class QueryService:
             raise DatabaseQueryError(f"Could not load table data for {table_name}") from error
 
         return PageResult(
-            columns=tuple(column["name"] for column in column_info),
+            columns=columns,
             rows=rows,
             page_number=page_number,
             page_size=TABLE_PAGE_SIZE,

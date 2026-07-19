@@ -68,6 +68,25 @@ def test_delete_removes_row_by_primary_key(sqlite_db_path):
     ).fetchall()) == ((1,), (3,))
 
 
+def test_delete_removes_row_with_null_text_primary_key(tmp_path):
+    path = tmp_path / "records.sqlite"
+    with sqlite3.connect(path) as connection:
+        connection.execute("CREATE TABLE records (code TEXT PRIMARY KEY, value TEXT)")
+        connection.executemany(
+            "INSERT INTO records VALUES (?, ?)",
+            ((None, "first"), ("second", "second")),
+        )
+    manager = ConnectionManager()
+    connection_id = manager.open(path)
+    columns = SchemaService(manager).table_columns(connection_id, "records")
+
+    RowWriteService(manager).delete(connection_id, "records", columns, (None,), None)
+
+    assert tuple(tuple(row) for row in manager.get(connection_id).execute(
+        "SELECT code, value FROM records"
+    ).fetchall()) == (("second", "second"),)
+
+
 def test_update_keyless_table_uses_rowid(tmp_path):
     path = tmp_path / "notes.sqlite"
     with sqlite3.connect(path) as connection:

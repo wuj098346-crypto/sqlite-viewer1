@@ -7,6 +7,8 @@ from sqlite_viewer.models.errors import DatabaseQueryError, ExportError
 from sqlite_viewer.services.connection import ConnectionManager
 from sqlite_viewer.services.export import ExportService
 from sqlite_viewer.services.query import QueryService
+from sqlite_viewer.services.row_write import RowWriteService
+from sqlite_viewer.services.schema import SchemaService
 
 
 @pytest.fixture
@@ -78,6 +80,27 @@ def test_keyless_table_retains_hidden_rowids(tmp_path):
     assert result.columns == ("body",)
     assert result.rows == (("one",), ("two",))
     assert result.row_ids == (1, 2)
+
+
+def test_keyless_table_with_rowid_column_deletes_one_row_using_safe_hidden_id(tmp_path):
+    database_path = tmp_path / "notes.sqlite"
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("CREATE TABLE notes (rowid TEXT, body TEXT)")
+        connection.executemany(
+            "INSERT INTO notes VALUES (?, ?)",
+            (("duplicate", "first"), ("duplicate", "second")),
+        )
+
+    manager = ConnectionManager()
+    connection_id = manager.open(database_path)
+    page = QueryService(manager).fetch_table_page(connection_id, "notes", 1)
+    columns = SchemaService(manager).table_columns(connection_id, "notes")
+
+    RowWriteService(manager).delete(connection_id, "notes", columns, (), page.row_ids[0])
+
+    assert tuple(tuple(row) for row in manager.get(connection_id).execute(
+        "SELECT body FROM notes"
+    ).fetchall()) == (("second",),)
 
 
 def test_csv_export_writes_utf8_headers_and_normalizes_nulls(tmp_path):
