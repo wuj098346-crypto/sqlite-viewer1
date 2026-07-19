@@ -16,23 +16,17 @@ def _database_path(database: DatabaseIdentity | Path) -> Path:
     return database
 
 
-def build_read_only_uri(path: Path) -> str:
-    return f"{path.resolve().as_uri()}?mode=ro"
-
-
 class ConnectionManager:
     def __init__(self) -> None:
         self._connections: dict[str, sqlite3.Connection] = {}
         self._lock = RLock()
 
-    def open_read_only(self, database: DatabaseIdentity | Path) -> str:
+    def open(self, database: DatabaseIdentity | Path) -> str:
         path = _database_path(database)
         self._validate_database_file(path)
 
         try:
-            connection = sqlite3.connect(
-                build_read_only_uri(path), uri=True, check_same_thread=False
-            )
+            connection = sqlite3.connect(path, check_same_thread=False)
         except (OSError, sqlite3.Error) as error:
             raise DatabaseOpenError(f"Could not open database: {path}") from error
 

@@ -39,7 +39,7 @@ class DatabaseTab(QWidget):
 
     def open(self) -> None:
         try:
-            self.connection_id = self._connections.open_read_only(self.identity)
+            self.connection_id = self._connections.open(self.identity)
             self._populate_objects()
             self.error_label.clear()
         except SQLiteViewerError as error:

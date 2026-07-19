@@ -1,6 +1,6 @@
 """Application services for SQLite Viewer."""
 
-from .connection import ConnectionManager, build_read_only_uri
+from .connection import ConnectionManager
 from .export import ExportService
 from .query import QueryService
 from .schema import SchemaService
@@ -10,5 +10,4 @@ __all__ = [
     "ExportService",
     "QueryService",
     "SchemaService",
-    "build_read_only_uri",
 ]
