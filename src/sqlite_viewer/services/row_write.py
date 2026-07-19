@@ -52,6 +52,20 @@ class RowWriteService:
             raise DatabaseWriteError("Row identity is required")
         self._execute(connection_id, f"UPDATE {quote_identifier(table_name)} SET {assignments} WHERE {where}", tuple(values.get(column.name) for column in editable) + locator_values)
 
+    def delete(self, connection_id: str, table_name: str, columns: tuple[ColumnInfo, ...], primary_key_values: tuple[object, ...], row_id: int | None) -> None:
+        keys = tuple(column for column in columns if column.is_primary_key)
+        if keys:
+            if len(primary_key_values) != len(keys):
+                raise DatabaseWriteError("Primary key values are required")
+            where = " AND ".join(f"{quote_identifier(column.name)} = ?" for column in keys)
+            locator_values = primary_key_values
+        elif row_id is not None:
+            where = "rowid = ?"
+            locator_values = (row_id,)
+        else:
+            raise DatabaseWriteError("Row identity is required")
+        self._execute(connection_id, f"DELETE FROM {quote_identifier(table_name)} WHERE {where}", locator_values)
+
     def _execute(self, connection_id: str, statement: str, parameters: tuple[object, ...]) -> None:
         try:
             connection = self._connections.get(connection_id)

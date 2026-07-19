@@ -56,6 +56,18 @@ def test_update_only_changes_non_primary_key_values(sqlite_db_path):
     ).fetchone()) == (1, "Alicia", 1, None)
 
 
+def test_delete_removes_row_by_primary_key(sqlite_db_path):
+    manager = ConnectionManager()
+    connection_id = manager.open(sqlite_db_path)
+    columns = SchemaService(manager).table_columns(connection_id, "students")
+
+    RowWriteService(manager).delete(connection_id, "students", columns, (2,), None)
+
+    assert tuple(tuple(row) for row in manager.get(connection_id).execute(
+        "SELECT id FROM students ORDER BY id"
+    ).fetchall()) == ((1,), (3,))
+
+
 def test_update_keyless_table_uses_rowid(tmp_path):
     path = tmp_path / "notes.sqlite"
     with sqlite3.connect(path) as connection:
@@ -68,6 +80,23 @@ def test_update_keyless_table_uses_rowid(tmp_path):
     RowWriteService(manager).update(connection_id, "notes", columns, (), 1, {"body": "new"})
 
     assert manager.get(connection_id).execute("SELECT body FROM notes").fetchone()[0] == "new"
+
+
+def test_delete_keyless_table_uses_rowid(tmp_path):
+    path = tmp_path / "notes.sqlite"
+    with sqlite3.connect(path) as connection:
+        connection.execute("CREATE TABLE notes (body TEXT)")
+        connection.execute("INSERT INTO notes VALUES ('first')")
+        connection.execute("INSERT INTO notes VALUES ('second')")
+    manager = ConnectionManager()
+    connection_id = manager.open(path)
+    columns = SchemaService(manager).table_columns(connection_id, "notes")
+
+    RowWriteService(manager).delete(connection_id, "notes", columns, (), 1)
+
+    assert tuple(tuple(row) for row in manager.get(connection_id).execute(
+        "SELECT body FROM notes"
+    ).fetchall()) == (("second",),)
 
 
 def test_insert_preserves_empty_string_and_null(sqlite_db_path):
