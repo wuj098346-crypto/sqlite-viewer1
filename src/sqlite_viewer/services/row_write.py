@@ -85,15 +85,17 @@ class RowWriteService:
             f"DELETE FROM {identifier} WHERE {where} "
             f"AND (SELECT COUNT(*) FROM {identifier} WHERE {where}) = 1"
         )
+        connection = self._connections.get(connection_id)
         try:
-            connection = self._connections.get(connection_id)
             cursor = connection.execute(
                 statement, primary_key_values + primary_key_values
             )
             if cursor.rowcount != 1:
+                connection.rollback()
                 raise DatabaseWriteError("Row identity is required")
             connection.commit()
         except sqlite3.Error as error:
+            connection.rollback()
             raise DatabaseWriteError(str(error)) from error
 
     def _execute(self, connection_id: str, statement: str, parameters: tuple[object, ...]) -> None:

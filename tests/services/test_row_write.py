@@ -118,6 +118,8 @@ def test_delete_rejects_missing_primary_key(tmp_path):
     with pytest.raises(DatabaseWriteError, match="Row identity is required"):
         RowWriteService(manager).delete(connection_id, "records", columns, ("missing",), None)
 
+    assert manager.get(connection_id).in_transaction is False
+
 
 def test_update_keyless_table_uses_rowid(tmp_path):
     path = tmp_path / "notes.sqlite"
