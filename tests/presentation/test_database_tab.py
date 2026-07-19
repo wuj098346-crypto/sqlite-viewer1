@@ -1,3 +1,5 @@
+import sqlite3
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox
 
@@ -110,3 +112,25 @@ def test_database_tab_shows_write_error_when_row_delete_fails(qtbot, sqlite_db_p
     qtbot.mouseClick(tab.data_view.delete_button, Qt.LeftButton)
 
     assert tab.error_label.text() == "cannot delete row"
+
+
+def test_database_tab_returns_to_previous_page_after_deleting_only_row_on_last_page(qtbot, sqlite_db_path, monkeypatch):
+    with sqlite3.connect(sqlite_db_path) as connection:
+        connection.executemany(
+            "INSERT INTO students (id, name, course_id) VALUES (?, ?, ?)",
+            ((student_id, f"Student {student_id}", 1) for student_id in range(4, 102)),
+        )
+
+    manager = ConnectionManager()
+    tab = DatabaseTab(DatabaseIdentity(sqlite_db_path, "sample.sqlite"), manager)
+    qtbot.addWidget(tab)
+    tab.open()
+    tab.show_table("students")
+    tab.data_view.set_page(tab._query.fetch_table_page(tab.connection_id, "students", 2))
+    tab.data_view.table.selectRow(0)
+    monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.Yes)
+
+    qtbot.mouseClick(tab.data_view.delete_button, Qt.LeftButton)
+
+    assert tab.data_view.page.page_number == 1
+    assert tab.data_view.model.rowCount() == 100

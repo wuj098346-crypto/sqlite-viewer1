@@ -150,7 +150,10 @@ class DatabaseTab(QWidget):
 
     def _load_current_page(self) -> None:
         if self.connection_id and self._current_table_name:
-            self.data_view.set_page(self._query.fetch_table_page(self.connection_id, self._current_table_name, self.data_view._page_number))
+            page = self._query.fetch_table_page(self.connection_id, self._current_table_name, self.data_view._page_number)
+            if page.page_number > 1 and not page.rows:
+                page = self._query.fetch_table_page(self.connection_id, self._current_table_name, page.page_number - 1)
+            self.data_view.set_page(page)
 
     def _show_add_dialog(self) -> None:
         if self._current_table_name is None:
