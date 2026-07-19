@@ -61,6 +61,15 @@ class RowWriteService:
                 raise DatabaseWriteError("Primary key values are required")
             where = " AND ".join(f"{quote_identifier(column.name)} IS ?" for column in keys)
             locator_values = primary_key_values
+            try:
+                matches = self._connections.get(connection_id).execute(
+                    f"SELECT COUNT(*) FROM {quote_identifier(table_name)} WHERE {where}",
+                    locator_values,
+                ).fetchone()[0]
+            except sqlite3.Error as error:
+                raise DatabaseWriteError(str(error)) from error
+            if matches != 1:
+                raise DatabaseWriteError("Row identity is required")
         elif row_id is not None and (row_identifier := hidden_row_identifier(
             column.name for column in columns
         )) is not None:
